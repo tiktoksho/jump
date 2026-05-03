@@ -1,0 +1,262 @@
+<!DOCTYPE html><html lang="pt-BR"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#fff0f0">
+  <meta property="og:title" content="Helix Jump">
+  <title>Helix Jump</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='14' fill='%23FFE66D' stroke='%23FF6B6B' stroke-width='2'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --jogo-bg:      #FFE4EE;
+      --jogo-bg2:     #FFB3CB;
+      --jogo-text:    #1a1a2e;
+      --jogo-accent:  #e91e63;
+      --jogo-accent2: #c2185b;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      font-family: 'Arial', sans-serif;
+      background: var(--jogo-bg);
+    }
+
+    #game-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+      -webkit-tap-highlight-color: transparent;
+      background: linear-gradient(to bottom, var(--jogo-bg), var(--jogo-bg2)) !important;
+      opacity: 1 !important;
+    }
+
+    #game-container canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      background: transparent !important;
+      opacity: 1 !important;
+    }
+
+    #ui-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
+
+    #start-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.45);
+      pointer-events: auto;
+      z-index: 10;
+    }
+
+    #start-screen.hidden {
+      display: none;
+    }
+
+    #start-screen p {
+      font-size: 26px;
+      font-weight: bold;
+      color: var(--jogo-text);
+      margin-bottom: 20px;
+    }
+
+    #start-screen .arrow {
+      font-size: 52px;
+      animation: bounce-arrow 1s ease-in-out infinite;
+    }
+
+    @keyframes bounce-arrow {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(14px); }
+    }
+
+    #score {
+      position: absolute;
+      top: 20px;
+      top: calc(20px + env(safe-area-inset-top, 0px));
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 64px;
+      font-weight: bold;
+      color: var(--jogo-text);
+      white-space: nowrap;
+      pointer-events: none;
+    }
+
+    #idle-hint {
+      position: absolute;
+      bottom: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 18px;
+      color: var(--jogo-text);
+      opacity: 0.45;
+      display: none;
+      pointer-events: none;
+    }
+
+    #idle-hint.visible {
+      display: block;
+      animation: blink-hint 1.5s ease-in-out infinite;
+    }
+
+    @keyframes blink-hint {
+      0%, 100% { opacity: 0.4; }
+      50% { opacity: 1; }
+    }
+
+    #combo {
+      position: absolute;
+      top: 96px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 20px;
+      font-weight: bold;
+      color: var(--jogo-accent);
+      display: none;
+      pointer-events: none;
+    }
+
+    #combo.visible {
+      display: block;
+    }
+
+    #points-popup {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 38px;
+      font-weight: bold;
+      color: var(--jogo-text);
+      pointer-events: none;
+      opacity: 0;
+      display: none;
+    }
+
+    #points-popup.visible {
+      display: block;
+    }
+
+    #game-over {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+      display: none;
+      pointer-events: none;
+      background: var(--jogo-bg);
+      padding: 36px 52px;
+      border-radius: 20px;
+      box-shadow: 0 4px 32px rgba(0, 0, 0, 0.25);
+    }
+
+    #game-over.visible {
+      display: block;
+      pointer-events: auto;
+    }
+
+    #game-over h2 {
+      margin-bottom: 16px;
+      color: var(--jogo-text);
+      font-size: 30px;
+    }
+
+    #game-over p {
+      margin-bottom: 8px;
+      color: var(--jogo-text);
+      opacity: 0.7;
+      font-size: 18px;
+    }
+
+    #game-over .restart-btn {
+      margin-top: 24px;
+      padding: 14px 36px;
+      font-size: 18px;
+      font-weight: bold;
+      color: white;
+      background: var(--jogo-accent);
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-family: Arial, sans-serif;
+      transition: background 0.2s;
+    }
+
+    #game-over .restart-btn:hover {
+      background: var(--jogo-accent2);
+    }
+
+  </style>
+  <script>
+    (function () {
+      var api = (function () {
+        var loc = window.location;
+        var parts = loc.pathname.split('/');
+        // Remove 'jogo' e arquivo do path para subir ao raiz
+        var base = parts.slice(0, parts.indexOf('jogo')).join('/');
+        return loc.origin + base + '/api/index.php';
+      })();
+
+      fetch(api + '/public/config?_=' + Date.now())
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+          var c = (data && data.cores) ? data.cores : {};
+          var root = document.documentElement;
+          if (c.cor_bg)     root.style.setProperty('--jogo-bg',      c.cor_bg);
+          if (c.cor_bg2)    root.style.setProperty('--jogo-bg2',     c.cor_bg2);
+          if (c.cor_text)   root.style.setProperty('--jogo-text',    c.cor_text);
+          if (c.cor_pink)   root.style.setProperty('--jogo-accent',  c.cor_pink);
+          if (c.cor_pink2)  root.style.setProperty('--jogo-accent2', c.cor_pink2);
+        })
+        .catch(function () {});
+    })();
+  </script>
+  <script type="module" crossorigin="" src="js/index-Bayz75v7.js"></script>
+</head>
+<body>
+  <div id="game-container">
+    <canvas id="canvas"></canvas>
+    <div id="ui-overlay">
+      <div id="start-screen">
+        <p>Toque para jogar</p>
+        <span class="arrow">↓</span>
+      </div>
+      <div id="score">0</div>
+      <div id="idle-hint">← Arraste →</div>
+      <div id="combo">2x combo!</div>
+      <div id="points-popup">+100!</div>
+      <div id="game-over">
+        <h2>Game Over</h2>
+        <p>Score: <span id="final-score">0</span></p>
+        <p>Recorde: <span id="record">0</span></p>
+        <button class="restart-btn">Jogar Novamente</button>
+      </div>
+    </div>
+  </div>
+
+
+</body></html>
